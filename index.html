@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Money Made — Track Your Wins</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; overflow-x: hidden; width: 100%; position: relative; }
+    html { height: -webkit-fill-available; }
+    body { font-family: 'DM Sans', sans-serif; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fillBar { from { width: 0%; } }
+    * { -webkit-tap-highlight-color: transparent; }
+    input, select, textarea { font-size: 16px !important; -webkit-text-size-adjust: 100%; }
+    .reset-btn { opacity: 0.4; transition: opacity 0.3s ease; }
+    .reset-btn:hover { opacity: 1; }
+    .reset-tooltip { opacity: 0; transition: opacity 0.2s ease; pointer-events: none; position: absolute; bottom: 100%; right: 0; margin-bottom: 6px; white-space: nowrap; font-size: 10px; padding: 4px 10px; border-radius: 6px; z-index: 10; }
+    .reset-btn:hover .reset-tooltip { opacity: 1; }
+    @supports(height: 100dvh) { .app-root { min-height: 100dvh; } }
+  </style>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+  <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const {useState, useCallback, useEffect, Fragment} = React;
+const {
+  BarChart, Bar, LineChart, Line, AreaChart, Area, RadarChart, Radar,
+  PolarGrid, PolarAngleAxis, PolarRadiusAxis, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+} = Recharts;
+
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const CHART_TYPES = ["Bar","Line","Area","Radar","Pie"];
+const DEFAULT_SOURCES = ["Bounties","Ambassadorships","Content","Dev","Web3 Jobs","NFTs","Predictions","X Monetization","Other"];
+
+const LIGHT = {
+  bg:"linear-gradient(180deg,#FFFCF7 0%,#F7F2EA 50%,#FFF9F0 100%)",
+  card:"#FFFCF7",border:"#EDE6DA",text:"#3D3225",sub:"#8B7355",muted:"#BDB298",
+  input:"#FAF6EF",inputBorder:"#E8E0D4",barBg:"#F0E9DD",accent:"#C4956A",
+  accentGrad:"linear-gradient(90deg,#D4C5B0 0%,#C4956A 100%)",
+  greenGrad:"linear-gradient(90deg,#C4956A 0%,#6B8E5A 100%)",
+  green:"#6B8E5A",pill:"#EDE6DA",pillActive:"rgba(255,255,255,0.3)",
+  gridLine:"#EDE6DA",chartCursor:"rgba(139,115,85,0.06)",tag:"#F0E9DD",
+  toggleBg:"#F0E9DD",tooltipBg:"#FFFCF7",tooltipBorder:"#E8E0D4",danger:"#C0524D",
+  sc:{"Bounties":"#C4956A","Ambassadorships":"#8B7355","Content":"#D4A574","Dev":"#A0522D","Web3 Jobs":"#9C7E5C","NFTs":"#C2A67E","Predictions":"#7A6245","X Monetization":"#B08D6A","Other":"#BDB298"},
+};
+
+const DARK = {
+  bg:"linear-gradient(180deg,#1A1714 0%,#201D18 50%,#1A1714 100%)",
+  card:"#252219",border:"#3A3530",text:"#F0E9DD",sub:"#A89880",muted:"#6B6256",
+  input:"#2C2820",inputBorder:"#3A3530",barBg:"#2C2820",accent:"#C4956A",
+  accentGrad:"linear-gradient(90deg,#5C4D3C 0%,#C4956A 100%)",
+  greenGrad:"linear-gradient(90deg,#C4956A 0%,#6B8E5A 100%)",
+  green:"#7DA86B",pill:"#3A3530",pillActive:"rgba(255,255,255,0.15)",
+  gridLine:"#3A3530",chartCursor:"rgba(196,149,106,0.08)",tag:"#3A3530",
+  toggleBg:"#3A3530",tooltipBg:"#252219",tooltipBorder:"#3A3530",danger:"#D4645F",
+  sc:{"Bounties":"#D4A87A","Ambassadorships":"#A89880","Content":"#DEB88A","Dev":"#C0724D","Web3 Jobs":"#B09878","NFTs":"#D4BA90","Predictions":"#9A8260","X Monetization":"#C4A07A","Other":"#8A7D6E"},
+};
+
+const gid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const fmt = n => "$"+n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+const STORAGE_KEY = "moneymade-v2";
+const saveFn = (w, g, s) => {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({wins:w, goals:g, sources:s})); } catch(e) {}
+};
+const loadFn = () => {
+  try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : null; } catch(e) { return null; }
+};
+
+function App() {
+  const [dark, setDark] = useState(() => {
+    try { return localStorage.getItem("moneymade-dark") === "true"; } catch(e) { return false; }
+  });
+  const th = dark ? DARK : LIGHT;
+  const [loaded, setLoaded] = useState(false);
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [chartType, setChartType] = useState("Bar");
+  const [wins, setWins] = useState([]);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addForm, setAddForm] = useState({month:MONTHS[new Date().getMonth()],project:"",amount:"",source:"Bounties"});
+  const [activeMonth, setActiveMonth] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({month:"Jan",project:"",amount:"",source:"Bounties"});
+  const [goals, setGoals] = useState({});
+  const [showGoalForm, setShowGoalForm] = useState(false);
+  const [goalForm, setGoalForm] = useState({month:"Jan",target:""});
+  const [editingGoalKey, setEditingGoalKey] = useState(null);
+  const [sourceView, setSourceView] = useState("yearly");
+  const [sourceMonth, setSourceMonth] = useState(MONTHS[new Date().getMonth()]);
+  const [winMonth, setWinMonth] = useState(null);
+  const [confirmReset, setConfirmReset] = useState(null);
+  const [showCSVPanel, setShowCSVPanel] = useState(false);
+  const [csvMode, setCsvMode] = useState("export");
+  const [csvText, setCsvText] = useState("");
+  const [toast, setToast] = useState(null);
+  const [sources, setSources] = useState(DEFAULT_SOURCES);
+  const [showSourceManager, setShowSourceManager] = useState(false);
+  const [newSource, setNewSource] = useState("");
+
+  const showToast = (msg) => { setToast(msg); setTimeout(()=>setToast(null), 3000); };
+
+  useEffect(() => {
+    const d = loadFn();
+    if(d) {
+      if(d.wins && d.wins.length > 0) setWins(d.wins);
+      if(d.goals) setGoals(d.goals);
+      if(d.sources && d.sources.length > 0) setSources(d.sources);
+    }
+    setLoaded(true);
+  }, []);
+
+  useEffect(() => { if(loaded) saveFn(wins, goals, sources); }, [wins, goals, sources, loaded]);
+
+  useEffect(() => {
+    try { localStorage.setItem("moneymade-dark", dark ? "true" : "false"); } catch(e) {}
+  }, [dark]);
+
+  // Source management
+  const addSource = () => {
+    const s = newSource.trim();
+    if(!s || sources.includes(s)) { showToast(s ? "Source already exists" : "Enter a name"); return; }
+    setSources(p => [...p, s]);
+    setNewSource("");
+    showToast('Added "'+s+'"');
+  };
+  const deleteSource = (s) => {
+    if(sources.length <= 1) { showToast("Need at least one source"); return; }
+    setSources(p => p.filter(x => x !== s));
+    const fallback = sources.find(x => x !== s) || "Other";
+    setWins(p => p.map(w => w.source === s ? {...w, source: fallback} : w));
+    showToast('Removed "'+s+'"');
+  };
+
+  // Derived data
+  const gk = (m,y) => y+"-"+m;
+  const yw = wins.filter(w=>w.year===year);
+  const totalEarned = yw.reduce((s,w)=>s+w.amount,0);
+  const displayMonth = activeMonth || MONTHS[new Date().getMonth()];
+  const cGoal = goals[gk(displayMonth,year)];
+  const cEarned = yw.filter(w=>w.month===displayMonth).reduce((s,w)=>s+w.amount,0);
+  const gPct = cGoal ? Math.min((cEarned/cGoal)*100,100) : 0;
+  const exceeded = cGoal && cEarned > cGoal;
+  const bestMonth = (()=>{let b={m:"\u2014",t:0};MONTHS.forEach(m=>{const v=yw.filter(w=>w.month===m).reduce((s,w)=>s+w.amount,0);if(v>b.t)b={m,t:v};});return b.t>0?b.m+" ("+fmt(b.t)+")":"\u2014";})();
+  const topSource = (()=>{const m={};yw.forEach(w=>{m[w.source]=(m[w.source]||0)+w.amount;});let b={n:"\u2014",t:0};Object.entries(m).forEach(([n,v])=>{if(v>b.t)b={n,t:v};});return b.t>0?b.n:"\u2014";})();
+  const monthlyChart = MONTHS.map(m=>({month:m,earnings:parseFloat(yw.filter(w=>w.month===m).reduce((s,w)=>s+w.amount,0).toFixed(2))}));
+  const pieData = (()=>{const m={};yw.forEach(w=>{m[w.source]=(m[w.source]||0)+w.amount;});return Object.entries(m).sort((a,b)=>b[1]-a[1]).map(([n,v])=>({name:n,value:parseFloat(v.toFixed(2)),color:th.sc[n]||th.muted}));})();
+
+  // CRUD
+  const handleAddSubmit = () => {
+    if(!addForm.project.trim()||!addForm.amount)return;
+    const amt=parseFloat(addForm.amount);if(isNaN(amt)||amt<=0)return;
+    setWins(p=>[...p,{id:gid(),month:addForm.month,project:addForm.project.trim(),amount:amt,year,source:addForm.source}]);
+    setAddForm({month:MONTHS[new Date().getMonth()],project:"",amount:"",source:"Bounties"});
+    setShowAddForm(false);
+  };
+  const startEdit = useCallback((win)=>{
+    setEditForm({month:win.month,project:win.project,amount:String(win.amount),source:win.source||"Other"});
+    setEditingId(win.id);
+  },[]);
+  const saveEditFn = () => {
+    if(!editForm.project.trim()||!editForm.amount)return;
+    const amt=parseFloat(editForm.amount);if(isNaN(amt)||amt<=0)return;
+    setWins(p=>p.map(w=>w.id===editingId?{...w,month:editForm.month,project:editForm.project.trim(),amount:amt,source:editForm.source}:w));
+    setEditingId(null);
+  };
+  const doDelete = useCallback((id)=>{
+    setWins(p=>p.filter(w=>w.id!==id));
+    if(editingId===id) setEditingId(null);
+  },[editingId]);
+  const handleGoalSubmit = () => {
+    const v=parseFloat(goalForm.target);if(isNaN(v)||v<=0)return;
+    setGoals(p=>({...p,[editingGoalKey||gk(goalForm.month,year)]:v}));
+    setGoalForm({month:"Jan",target:""});setShowGoalForm(false);setEditingGoalKey(null);
+  };
+
+  // Resets
+  const resetTargetMonth = winMonth || displayMonth;
+  const resetMonth = () => { const m=resetTargetMonth; setWins(p=>p.filter(w=>!(w.year===year&&w.month===m))); setGoals(p=>{const n={...p};delete n[gk(m,year)];return n;}); setConfirmReset(null); };
+  const resetYear = () => { setWins(p=>p.filter(w=>w.year!==year)); const ng={...goals};MONTHS.forEach(m=>{delete ng[gk(m,year)];});setGoals(ng);setConfirmReset(null); };
+
+  // CSV Export
+  const handleExportCSV = () => {
+    if(wins.length === 0 && Object.keys(goals).length === 0) { showToast("Nothing to export yet"); return; }
+    const rows = ["Year,Month,Project,Amount,Source"];
+    [...wins].sort((a,b)=>a.year-b.year||MONTHS.indexOf(a.month)-MONTHS.indexOf(b.month)).forEach(w => {
+      const proj = w.project.includes(",") ? '"'+w.project+'"' : w.project;
+      rows.push(w.year+","+w.month+","+proj+","+w.amount+","+w.source);
+    });
+    const goalEntries = Object.entries(goals).sort();
+    if(goalEntries.length > 0) {
+      rows.push("");
+      rows.push("GOAL,Year,Month,Target");
+      goalEntries.forEach(([key, target]) => {
+        const [yr, mo] = key.split("-");
+        rows.push("GOAL,"+yr+","+mo+","+target);
+      });
+    }
+    const csv = rows.join("\n");
+    setCsvText(csv);
+    setCsvMode("export");
+    setShowCSVPanel(true);
+    try { navigator.clipboard.writeText(csv); showToast("CSV copied to clipboard"); } catch(e) { showToast("CSV ready \u2014 copy it from the box below"); }
+  };
+
+  // CSV Import
+  const handleImportCSV = () => {
+    if(!csvText.trim()) { showToast("Paste your CSV data first"); return; }
+    const lines = csvText.trim().split("\n");
+    const newWins = [];
+    const newSources = [];
+    const newGoals = {};
+    let skipped = 0;
+    let goalCount = 0;
+    for(let i=0; i<lines.length; i++) {
+      const line = lines[i].trim();
+      if(!line) continue;
+      if(line.toLowerCase().startsWith("year,month")) continue;
+      if(line.toLowerCase().startsWith("goal,year")) continue;
+      if(line.startsWith("GOAL,")) {
+        const gParts = line.split(",");
+        if(gParts.length >= 4) {
+          const gYear = parseInt(gParts[1]);
+          const gMonth = gParts[2].trim();
+          const gTarget = parseFloat(gParts[3]);
+          if(!isNaN(gYear) && !isNaN(gTarget) && MONTHS.includes(gMonth)) {
+            newGoals[gYear+"-"+gMonth] = gTarget;
+            goalCount++;
+            continue;
+          }
+        }
+        skipped++; continue;
+      }
+      let parts;
+      if(line.includes('"')) {
+        const match = line.match(/^(\d+),(\w+),"([^"]+)",([^,]+),(.+)$/);
+        if(match) { parts = [match[1],match[2],match[3],match[4],match[5]]; }
+        else { skipped++; continue; }
+      } else {
+        parts = line.split(",");
+      }
+      if(parts.length < 4) { skipped++; continue; }
+      const yr = parseInt(parts[0]);
+      const mo = parts[1].trim();
+      const proj = parts[2].trim();
+      const amt = parseFloat(parts[3]);
+      const src = parts.length >= 5 ? parts[4].trim() : "Other";
+      if(isNaN(yr) || isNaN(amt) || !proj || !MONTHS.includes(mo)) { skipped++; continue; }
+      if(src && !sources.includes(src) && !newSources.includes(src)) {
+        newSources.push(src);
+      }
+      newWins.push({id:gid(),year:yr,month:mo,project:proj,amount:amt,source:src});
+    }
+    if(newWins.length === 0 && goalCount === 0) { showToast("No valid rows found \u2014 check format"); return; }
+    if(newSources.length > 0) setSources(p => [...p, ...newSources]);
+    if(newWins.length > 0) setWins(p => [...p, ...newWins]);
+    if(goalCount > 0) setGoals(p => ({...p, ...newGoals}));
+    const msgParts = [];
+    if(newWins.length > 0) msgParts.push(newWins.length+" wins");
+    if(goalCount > 0) msgParts.push(goalCount+" goals");
+    if(newSources.length > 0) msgParts.push(newSources.length+" new sources");
+    showToast("Imported "+msgParts.join(" + ")+(skipped > 0 ? " ("+skipped+" skipped)" : ""));
+    setCsvText("");
+    setShowCSVPanel(false);
+  };
+
+  // CSV file download
+  const handleDownloadCSV = () => {
+    if(!csvText) { handleExportCSV(); return; }
+    const blob = new Blob([csvText], {type: "text/csv;charset=utf-8;"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "money-made-"+year+".csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("CSV file downloaded");
+  };
+
+  // CSV file upload
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setCsvText(ev.target.result);
+      setCsvMode("import");
+      showToast("File loaded \u2014 click Import Data to apply");
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  // Display data
+  const displayWins = (winMonth?yw.filter(w=>w.month===winMonth):yw).sort((a,b)=>MONTHS.indexOf(a.month)-MONTHS.indexOf(b.month));
+  const displayTotal = displayWins.reduce((s,w)=>s+w.amount,0);
+  const srcPool = sourceView==="monthly"?yw.filter(w=>w.month===sourceMonth):yw;
+  const srcTotal = srcPool.reduce((s,w)=>s+w.amount,0);
+  const srcBreak = (()=>{const m={};srcPool.forEach(w=>{m[w.source]=(m[w.source]||0)+w.amount;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);})();
+
+  // Styles
+  const ax = {fontSize:11,fill:th.sub,fontFamily:"'DM Sans', sans-serif"};
+  const ttip = {background:th.tooltipBg,border:"1px solid "+th.tooltipBorder,borderRadius:8,fontFamily:"'DM Sans', sans-serif",fontSize:12,color:th.text};
+  const inp = {width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid "+th.inputBorder,background:th.input,fontSize:16,color:th.text,fontFamily:"'DM Sans', sans-serif",outline:"none",boxSizing:"border-box"};
+  const lblS = {fontSize:11,color:th.sub,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:4,display:"block"};
+  const tBtnS = (a)=>({padding:"5px 14px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:a?600:400,background:a?th.accent:"transparent",color:a?"#FFFCF7":th.sub,fontFamily:"'DM Sans', sans-serif",transition:"all 0.2s"});
+  const sPillS = (a)=>({padding:"4px 10px",borderRadius:14,border:"1px solid "+(a?th.accent:th.border),background:a?th.accent:"transparent",color:a?"#FFFCF7":th.sub,fontSize:10,cursor:"pointer",fontFamily:"'DM Sans', sans-serif",fontWeight:a?600:400});
+  const iconBtn = {width:34,height:34,borderRadius:"50%",border:"1px solid "+th.border,background:th.card,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"};
+  const yearBtn = {width:32,height:32,borderRadius:"50%",border:"1px solid "+th.border,background:th.card,cursor:"pointer",fontSize:14,color:th.sub,display:"flex",alignItems:"center",justifyContent:"center"};
+
+  const renderChart = () => {
+    const type=chartType.toLowerCase();
+    if(type==="pie"){
+      const d=pieData.length?pieData:[{name:"No Data",value:1,color:th.barBg}];
+      return(<ResponsiveContainer width="100%" height={300}><PieChart><Pie data={d} cx="50%" cy="50%" outerRadius={100} innerRadius={50} dataKey="value" label={({name})=>pieData.length?name:""} style={{fontSize:9,fontFamily:"'DM Sans', sans-serif",fill:th.sub}}>{d.map((e,i)=><Cell key={i} fill={e.color} stroke={th.card} strokeWidth={2}/>)}</Pie><Tooltip formatter={v=>fmt(v)} contentStyle={ttip}/></PieChart></ResponsiveContainer>);
+    }
+    if(type==="radar"){
+      return(<ResponsiveContainer width="100%" height={300}><RadarChart data={monthlyChart} cx="50%" cy="50%" outerRadius={100}><PolarGrid stroke={th.gridLine}/><PolarAngleAxis dataKey="month" tick={ax}/><PolarRadiusAxis tick={ax}/><Radar name="Earnings" dataKey="earnings" stroke={th.accent} fill={th.accent} fillOpacity={0.18} strokeWidth={2}/><Tooltip formatter={v=>fmt(v)} contentStyle={ttip}/></RadarChart></ResponsiveContainer>);
+    }
+    const C=type==="line"?LineChart:type==="area"?AreaChart:BarChart;
+    return(<ResponsiveContainer width="100%" height={300}><C data={monthlyChart} margin={{top:10,right:10,left:-5,bottom:0}}><CartesianGrid strokeDasharray="3 3" stroke={th.gridLine} vertical={false}/><XAxis dataKey="month" tick={ax} axisLine={{stroke:th.border}} tickLine={false}/><YAxis tick={ax} axisLine={false} tickLine={false} tickFormatter={v=>"$"+v}/><Tooltip formatter={v=>fmt(v)} contentStyle={ttip} cursor={{fill:th.chartCursor}}/>{type==="line"&&<Line type="monotone" dataKey="earnings" stroke={th.accent} strokeWidth={2.5} dot={{r:3,fill:th.accent,stroke:th.card,strokeWidth:2}} activeDot={{r:5}}/>}{type==="area"&&<Area type="monotone" dataKey="earnings" stroke={th.accent} fill={th.accent} fillOpacity={0.12} strokeWidth={2}/>}{type==="bar"&&<Bar dataKey="earnings" fill={th.accent} radius={[6,6,0,0]}/>}</C></ResponsiveContainer>);
+  };
+
+  const ThemeIcon = ()=>dark?(
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={th.sub} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+  ):(
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={th.sub} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+  );
+
+  const EditRow = ({win})=>(
+    <div style={{background:th.input,border:"1px solid "+th.accent,borderRadius:10,padding:"14px",animation:"fadeIn 0.15s ease"}}>
+      <div style={{fontSize:11,color:th.accent,fontWeight:600,marginBottom:10}}>Editing: {win.project}</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(130px, 1fr))",gap:8,marginBottom:8}}>
+        <div><label style={lblS}>Month</label><select value={editForm.month} onChange={e=>setEditForm(f=>({...f,month:e.target.value}))} style={inp}>{MONTHS.map(m=><option key={m} value={m}>{m}</option>)}</select></div>
+        <div><label style={lblS}>Amount ($)</label><input type="number" step="0.01" value={editForm.amount} onChange={e=>setEditForm(f=>({...f,amount:e.target.value}))} style={inp}/></div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(130px, 1fr))",gap:8,marginBottom:12}}>
+        <div><label style={lblS}>Project</label><input value={editForm.project} onChange={e=>setEditForm(f=>({...f,project:e.target.value}))} style={inp}/></div>
+        <div><label style={lblS}>Source</label><select value={editForm.source} onChange={e=>setEditForm(f=>({...f,source:e.target.value}))} style={inp}>{sources.map(s=><option key={s} value={s}>{s}</option>)}</select></div>
+      </div>
+      <div style={{display:"flex",gap:6}}>
+        <button onClick={saveEditFn} style={{flex:1,padding:"9px",borderRadius:8,border:"none",background:th.accent,color:"#FFFCF7",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans', sans-serif"}}>Save</button>
+        <button onClick={()=>setEditingId(null)} style={{padding:"9px 14px",borderRadius:8,border:"1px solid "+th.border,background:"transparent",color:th.sub,fontSize:12,cursor:"pointer",fontFamily:"'DM Sans', sans-serif"}}>Cancel</button>
+      </div>
+    </div>
+  );
+
+  if(!loaded) return <div style={{minHeight:"100vh",background:th.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans', sans-serif",color:th.sub,fontSize:14}}>Loading...</div>;
+
+  return (
+    <div className="app-root" style={{minHeight:"100vh",background:th.bg,fontFamily:"'DM Sans', sans-serif",color:th.text,transition:"background 0.3s ease, color 0.3s ease",overflowX:"hidden"}}>
+
+      {/* Toast */}
+      {toast && <div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",background:th.card,border:"1px solid "+th.accent,borderRadius:10,padding:"10px 20px",fontSize:12,color:th.accent,fontWeight:600,zIndex:100,boxShadow:"0 4px 16px rgba(0,0,0,0.12)",animation:"fadeIn 0.2s ease"}}>{toast}</div>}
+
+      {/* Header */}
+      <div style={{padding:"28px 20px 0",display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12}}>
+        <div>
+          <h1 style={{fontFamily:"'Playfair Display', serif",fontSize:28,fontWeight:700,margin:0,color:th.text,letterSpacing:"-0.5px"}}>Money Made</h1>
+          <p style={{margin:"4px 0 0",fontSize:12,color:th.sub}}>Track your wins, stack your bags</p>
+        </div>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <button onClick={()=>{setShowCSVPanel(!showCSVPanel);setCsvMode("export");setCsvText("");}} style={iconBtn} title="Import / Export CSV">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={th.sub} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </button>
+          <button onClick={()=>setDark(!dark)} style={iconBtn}><ThemeIcon/></button>
+          <button onClick={()=>setYear(y=>y-1)} style={yearBtn}>{"\u2190"}</button>
+          <span style={{fontFamily:"'Playfair Display', serif",fontSize:20,fontWeight:600,color:th.text,minWidth:48,textAlign:"center"}}>{year}</span>
+          <button onClick={()=>setYear(y=>y+1)} style={yearBtn}>{"\u2192"}</button>
+        </div>
+      </div>
+
+      {/* CSV Panel */}
+      {showCSVPanel && (
+        <div style={{margin:"16px 20px 0",background:th.card,border:"1px solid "+th.border,borderRadius:14,padding:"18px",animation:"fadeIn 0.2s ease"}}>
+          <div style={{display:"flex",gap:0,marginBottom:14}}>
+            <div style={{display:"flex",background:th.toggleBg,borderRadius:8,padding:2}}>
+              <button onClick={()=>{setCsvMode("export");setCsvText("");}} style={tBtnS(csvMode==="export")}>Export CSV</button>
+              <button onClick={()=>{setCsvMode("import");setCsvText("");}} style={tBtnS(csvMode==="import")}>Import CSV</button>
+            </div>
+          </div>
+          {csvMode==="export" ? (
+            <div>
+              <p style={{fontSize:12,color:th.sub,marginBottom:10}}>Export all your data as CSV. Copy to clipboard, download as file, or paste into Google Sheets / Excel.</p>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                <button onClick={handleExportCSV} style={{flex:1,minWidth:120,padding:"11px",borderRadius:8,border:"none",background:th.accent,color:"#FFFCF7",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans', sans-serif"}}>Export to Clipboard</button>
+                <button onClick={handleDownloadCSV} style={{flex:1,minWidth:120,padding:"11px",borderRadius:8,border:"1px solid "+th.accent,background:"transparent",color:th.accent,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans', sans-serif"}}>Download .csv File</button>
+                <button onClick={()=>setShowCSVPanel(false)} style={{padding:"11px 16px",borderRadius:8,border:"1px solid "+th.border,background:"transparent",color:th.sub,fontSize:12,cursor:"pointer",fontFamily:"'DM Sans', sans-serif"}}>Close</button>
+              </div>
+              {csvText && (
+                <textarea readOnly value={csvText} style={{width:"100%",marginTop:12,padding:10,borderRadius:8,border:"1px solid "+th.inputBorder,background:th.input,color:th.text,fontSize:11,fontFamily:"monospace",minHeight:120,resize:"vertical",outline:"none",boxSizing:"border-box"}} onClick={e=>e.target.select()}/>
+              )}
+            </div>
+          ) : (
+            <div>
+              <p style={{fontSize:12,color:th.sub,marginBottom:6}}>Paste CSV data below or upload a .csv file — wins and goals both get imported</p>
+              <p style={{fontSize:10,color:th.muted,marginBottom:10}}>Wins: Year,Month,Project,Amount,Source — Goals: GOAL,Year,Month,Target</p>
+              <div style={{marginBottom:10}}>
+                <label style={{display:"inline-flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:8,border:"1px solid "+th.accent,background:"transparent",color:th.accent,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans', sans-serif"}}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  Upload .csv file
+                  <input type="file" accept=".csv,.txt" onChange={handleFileUpload} style={{display:"none"}}/>
+                </label>
+              </div>
+              <textarea value={csvText} onChange={e=>setCsvText(e.target.value)} placeholder={"Year,Month,Project,Amount,Source\n2026,Jan,MyProject,100,Bounties\n2026,Feb,AnotherWin,50,Content\n\nGOAL,Year,Month,Target\nGOAL,2026,Jan,500\nGOAL,2026,Feb,400"} style={{width:"100%",padding:10,borderRadius:8,border:"1px solid "+th.inputBorder,background:th.input,color:th.text,fontSize:11,fontFamily:"monospace",minHeight:120,resize:"vertical",outline:"none",boxSizing:"border-box"}}/>
+              <div style={{display:"flex",gap:8,marginTop:10}}>
+                <button onClick={handleImportCSV} style={{flex:1,padding:"11px",borderRadius:8,border:"none",background:th.accent,color:"#FFFCF7",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans', sans-serif"}}>Import Data</button>
+                <button onClick={()=>{setShowCSVPanel(false);setCsvText("");}} style={{padding:"11px 16px",borderRadius:8,border:"1px solid "+th.border,background:"transparent",color:th.sub,fontSize:12,cursor:"pointer",fontFamily:"'DM Sans', sans-serif"}}>Close</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Goal */}
+      <div style={{margin:"20px 20px 0",background:th.card,border:"1px solid "+th.border,borderRadius:14,padding:"18px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
+          <div>
+            <div style={{fontSize:13,fontWeight:600,color:th.text}}>{displayMonth} Goal</div>
+            {cGoal?(<div style={{fontSize:12,color:th.sub,marginTop:2}}>{fmt(cEarned)} of {fmt(cGoal)} {exceeded&&<span style={{color:th.green,fontWeight:600}}>{"\u2014"} Exceeded!</span>}</div>):(<div style={{fontSize:12,color:th.muted,marginTop:2}}>No goal set</div>)}
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            {cGoal&&<button onClick={()=>setGoals(p=>{const n={...p};delete n[gk(displayMonth,year)];return n;})} style={{padding:"5px 10px",borderRadius:8,border:"1px solid "+th.border,background:"transparent",cursor:"pointer",fontSize:11,color:th.accent,fontFamily:"'DM Sans', sans-serif"}}>Remove</button>}
+            <button onClick={()=>{setGoalForm({month:displayMonth,target:cGoal?String(cGoal):""});setEditingGoalKey(cGoal?gk(displayMonth,year):null);setShowGoalForm(!showGoalForm);}} style={{padding:"5px 12px",borderRadius:8,border:"1px solid "+th.inputBorder,background:th.input,cursor:"pointer",fontSize:11,color:th.sub,fontFamily:"'DM Sans', sans-serif",fontWeight:500}}>{cGoal?"Edit":"Set Goal"}</button>
+          </div>
+        </div>
+        <div style={{width:"100%",height:24,background:th.barBg,borderRadius:12,overflow:"hidden",position:"relative"}}>
+          <div style={{width:cGoal?gPct+"%":"0%",height:"100%",background:exceeded?th.greenGrad:th.accentGrad,borderRadius:12,transition:"width 0.8s cubic-bezier(0.4,0,0.2,1)",display:"flex",alignItems:"center",justifyContent:"flex-end",paddingRight:gPct>15?10:0}}>
+            {cGoal&&gPct>15&&<span style={{fontSize:11,fontWeight:700,color:"#FFFCF7",textShadow:"0 1px 2px rgba(0,0,0,0.2)"}}>{Math.round(gPct)}%</span>}
+          </div>
+          {cGoal&&gPct<=15&&<span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:11,fontWeight:600,color:th.sub}}>{Math.round(gPct)}%</span>}
+        </div>
+        <div style={{display:"flex",gap:3,marginTop:12,flexWrap:"wrap"}}>{MONTHS.map(m=>{const g=goals[gk(m,year)];const e=yw.filter(w=>w.month===m).reduce((s,w)=>s+w.amount,0);const p=g?Math.min((e/g)*100,100):0;const hit=g&&e>=g;const isA=m===displayMonth;return(<div key={m} onClick={()=>setActiveMonth(isA&&activeMonth===m?null:m)} style={{flex:"1 1 0",minWidth:24,cursor:"pointer",textAlign:"center"}}><div style={{fontSize:8,color:isA?th.text:th.muted,fontWeight:isA?600:400,marginBottom:2}}>{m}</div><div style={{height:5,background:th.barBg,borderRadius:3,overflow:"hidden"}}><div style={{width:g?p+"%":"0%",height:"100%",background:hit?th.green:th.accent,borderRadius:3,transition:"width 0.5s ease"}}/></div></div>);})}</div>
+        {showGoalForm&&(<div style={{marginTop:14,padding:"14px",background:th.input,borderRadius:10,animation:"fadeIn 0.2s ease"}}><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(130px, 1fr))",gap:10,marginBottom:10}}><div><label style={lblS}>Month</label><select value={goalForm.month} onChange={e=>setGoalForm(f=>({...f,month:e.target.value}))} style={inp}>{MONTHS.map(m=><option key={m} value={m}>{m}</option>)}</select></div><div><label style={lblS}>Target ($)</label><input type="number" step="1" value={goalForm.target} onChange={e=>setGoalForm(f=>({...f,target:e.target.value}))} placeholder="500" style={inp}/></div></div><div style={{display:"flex",gap:8}}><button onClick={handleGoalSubmit} style={{flex:1,padding:"10px",borderRadius:8,border:"none",background:th.accent,color:"#FFFCF7",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans', sans-serif"}}>{editingGoalKey?"Update":"Set Goal"}</button><button onClick={()=>setShowGoalForm(false)} style={{padding:"10px 14px",borderRadius:8,border:"1px solid "+th.border,background:"transparent",color:th.sub,fontSize:12,cursor:"pointer",fontFamily:"'DM Sans', sans-serif"}}>Cancel</button></div></div>)}
+      </div>
+
+      {/* Stats */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(140px, 1fr))",gap:10,padding:"18px 20px 0"}}>{[{label:"Total Earned",value:fmt(totalEarned),ac:th.accent},{label:"Total Deals",value:yw.length,ac:th.sub},{label:"Best Month",value:bestMonth,ac:dark?"#C0724D":"#A0522D"},{label:"Top Source",value:topSource,ac:dark?"#DEB88A":"#D4A574"}].map((s,i)=>(<div key={i} style={{background:th.card,border:"1px solid "+th.border,borderRadius:12,padding:"14px 16px",position:"relative",overflow:"hidden"}}><div style={{position:"absolute",top:0,left:0,width:3,height:"100%",background:s.ac,borderRadius:"12px 0 0 12px"}}/><div style={{fontSize:10,color:th.sub,textTransform:"uppercase",letterSpacing:"1px",marginBottom:5}}>{s.label}</div><div style={{fontSize:17,fontWeight:700,color:th.accent,fontFamily:"'DM Sans', sans-serif",wordBreak:"break-word"}}>{s.value}</div></div>))}</div>
+
+      {/* Chart */}
+      <div style={{margin:"18px 20px 0",background:th.card,border:"1px solid "+th.border,borderRadius:14,padding:"18px 12px 14px"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,padding:"0 6px"}}><span style={{fontSize:13,fontWeight:600,color:th.text}}>Monthly Earnings</span><div style={{position:"relative",display:"inline-block"}}><select value={chartType} onChange={e=>setChartType(e.target.value)} style={{padding:"5px 28px 5px 10px",borderRadius:8,border:"1px solid "+th.inputBorder,background:th.input,fontSize:11,color:th.sub,fontFamily:"'DM Sans', sans-serif",cursor:"pointer",WebkitAppearance:"none",MozAppearance:"none",appearance:"none",outline:"none"}}>{CHART_TYPES.map(c=><option key={c} value={c}>{c} Chart</option>)}</select><span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",fontSize:10,color:th.sub,lineHeight:1}}>{"\u25BE"}</span></div></div>{renderChart()}</div>
+
+      {/* Add */}
+      <div style={{padding:"18px 20px 0"}}><button onClick={()=>{setShowAddForm(!showAddForm);setAddForm({month:MONTHS[new Date().getMonth()],project:"",amount:"",source:"Bounties"});}} style={{width:"100%",padding:"12px",borderRadius:10,border:"2px dashed "+th.border,background:"transparent",cursor:"pointer",fontSize:13,color:th.sub,fontFamily:"'DM Sans', sans-serif",fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><span style={{fontSize:18,lineHeight:1}}>+</span> Log a New Bag</button></div>
+
+      {showAddForm&&(<div style={{margin:"14px 20px 0",background:th.card,border:"1px solid "+th.border,borderRadius:12,padding:"18px",animation:"fadeIn 0.2s ease"}}><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(130px, 1fr))",gap:10,marginBottom:10}}><div><label style={lblS}>Month</label><select value={addForm.month} onChange={e=>setAddForm(f=>({...f,month:e.target.value}))} style={inp}>{MONTHS.map(m=><option key={m} value={m}>{m}</option>)}</select></div><div><label style={lblS}>Amount ($)</label><input type="number" step="0.01" value={addForm.amount} onChange={e=>setAddForm(f=>({...f,amount:e.target.value}))} placeholder="0.00" style={inp}/></div></div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(130px, 1fr))",gap:10,marginBottom:14}}><div><label style={lblS}>Project *</label><input value={addForm.project} onChange={e=>setAddForm(f=>({...f,project:e.target.value}))} placeholder="e.g. Project Name" style={inp}/></div><div><label style={lblS}>Source</label><select value={addForm.source} onChange={e=>setAddForm(f=>({...f,source:e.target.value}))} style={inp}>{sources.map(s=><option key={s} value={s}>{s}</option>)}</select></div></div><div style={{display:"flex",gap:8}}><button onClick={handleAddSubmit} style={{flex:1,padding:"11px",borderRadius:8,border:"none",background:th.accent,color:"#FFFCF7",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans', sans-serif"}}>Log This Bag</button><button onClick={()=>setShowAddForm(false)} style={{padding:"11px 16px",borderRadius:8,border:"1px solid "+th.border,background:"transparent",color:th.sub,fontSize:12,cursor:"pointer",fontFamily:"'DM Sans', sans-serif"}}>Cancel</button></div></div>)}
+
+      {/* Bottom: Winnings + Sources */}
+      <div style={{padding:"18px 20px 20px",display:"flex",gap:16,alignItems:"flex-start",flexWrap:"wrap"}}>
+        <div style={{flex:"1 1 300px",minWidth:0}}>
+          <div style={{fontSize:14,fontWeight:600,color:th.text,marginBottom:10}}>Winnings</div>
+          <div style={{display:"flex",gap:4,marginBottom:10,flexWrap:"wrap"}}><button onClick={()=>setWinMonth(null)} style={sPillS(!winMonth)}>All</button>{MONTHS.map(m=>{const c=yw.filter(w=>w.month===m).length;if(c===0)return null;return <button key={m} onClick={()=>setWinMonth(winMonth===m?null:m)} style={sPillS(winMonth===m)}>{m} ({c})</button>;})}</div>
+          {winMonth&&<div style={{fontSize:12,color:th.sub,marginBottom:8}}>{winMonth} Total: <span style={{fontWeight:700,color:th.text}}>{fmt(displayTotal)}</span></div>}
+          {displayWins.length===0?(<div style={{textAlign:"center",padding:"36px 16px",color:th.muted,fontSize:13,background:th.card,border:"1px solid "+th.border,borderRadius:12}}>{winMonth?"Nothing for "+winMonth+" yet":"No bags for "+year+" yet"}<br/><span style={{fontSize:11,marginTop:4,display:"inline-block"}}>Log your first win above</span></div>):(
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>{displayWins.map(win=>(<Fragment key={win.id}>{editingId===win.id?(<EditRow win={win}/>):(<div style={{background:th.card,border:"1px solid "+th.border,borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:8}}><div style={{width:3,height:38,borderRadius:3,background:th.sc[win.source]||th.muted,flexShrink:0}}/><div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:5,marginBottom:1,flexWrap:"wrap"}}><span style={{fontSize:12,fontWeight:600,color:th.text}}>{win.project}</span><span style={{fontSize:8,background:th.tag,color:th.sub,padding:"2px 6px",borderRadius:8}}>{win.month}</span><span style={{fontSize:8,background:th.sc[win.source]||th.muted,color:"#FFFCF7",padding:"2px 6px",borderRadius:8}}>{win.source}</span></div><div style={{fontSize:14,fontWeight:700,color:th.accent,fontFamily:"'Playfair Display', serif"}}>{fmt(win.amount)}</div></div><div style={{display:"flex",gap:3,flexShrink:0}}><button onClick={e=>{e.preventDefault();e.stopPropagation();startEdit(win);}} style={{width:28,height:28,borderRadius:6,border:"1px solid "+th.border,background:th.input,cursor:"pointer",fontSize:11,color:th.sub,display:"flex",alignItems:"center",justifyContent:"center",WebkitAppearance:"none",touchAction:"manipulation"}}>{"\u270E"}</button><button onClick={e=>{e.preventDefault();e.stopPropagation();doDelete(win.id);}} style={{width:28,height:28,borderRadius:6,border:"1px solid "+th.border,background:th.input,cursor:"pointer",fontSize:11,color:th.accent,display:"flex",alignItems:"center",justifyContent:"center",WebkitAppearance:"none",touchAction:"manipulation"}}>{"\u00D7"}</button></div></div>)}</Fragment>))}</div>
+          )}
+        </div>
+        <div style={{flex:"1 1 260px",minWidth:0,maxWidth:360}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <div style={{fontSize:14,fontWeight:600,color:th.text}}>Sources</div>
+              <button onClick={()=>setShowSourceManager(!showSourceManager)} style={{width:22,height:22,borderRadius:6,border:"1px solid "+th.border,background:"transparent",cursor:"pointer",fontSize:10,color:th.muted,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"manipulation"}} title="Manage sources">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={th.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              </button>
+            </div>
+            <div style={{display:"flex",background:th.toggleBg,borderRadius:8,padding:2}}><button onClick={()=>setSourceView("yearly")} style={tBtnS(sourceView==="yearly")}>Yearly</button><button onClick={()=>setSourceView("monthly")} style={tBtnS(sourceView==="monthly")}>Monthly</button></div>
+          </div>
+          {showSourceManager&&(
+            <div style={{marginBottom:14,padding:"14px",background:th.input,borderRadius:10,animation:"fadeIn 0.15s ease"}}>
+              <div style={{fontSize:11,color:th.sub,fontWeight:600,marginBottom:8}}>Manage Sources</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:10}}>
+                {sources.map(s=>(
+                  <div key={s} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px 4px 10px",borderRadius:8,background:th.card,border:"1px solid "+th.border,fontSize:11,color:th.text}}>
+                    <span>{s}</span>
+                    <button onClick={()=>deleteSource(s)} style={{width:16,height:16,borderRadius:4,border:"none",background:"transparent",cursor:"pointer",fontSize:10,color:th.muted,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"manipulation"}}>{"\u00D7"}</button>
+                  </div>
+                ))}
+              </div>
+              <div style={{display:"flex",gap:6}}>
+                <input value={newSource} onChange={e=>setNewSource(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")addSource();}} placeholder="New source name" style={{...inp,flex:1}}/>
+                <button onClick={addSource} style={{padding:"8px 14px",borderRadius:8,border:"none",background:th.accent,color:"#FFFCF7",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans', sans-serif",whiteSpace:"nowrap"}}>Add</button>
+              </div>
+            </div>
+          )}
+          {sourceView==="monthly"&&(<div style={{display:"flex",gap:4,marginBottom:10,flexWrap:"wrap"}}>{MONTHS.map(m=><button key={m} onClick={()=>setSourceMonth(m)} style={sPillS(sourceMonth===m)}>{m}</button>)}</div>)}
+          {srcBreak.length===0?(<div style={{textAlign:"center",padding:"28px 14px",color:th.muted,fontSize:12,background:th.card,border:"1px solid "+th.border,borderRadius:12}}>{sourceView==="monthly"?"No data for "+sourceMonth:"No data yet"}</div>):(
+            <div style={{background:th.card,border:"1px solid "+th.border,borderRadius:12,padding:"16px"}}><div style={{display:"flex",flexDirection:"column",gap:12}}>{srcBreak.map(([src,amt])=>{const pct=srcTotal>0?(amt/srcTotal)*100:0;return(<div key={src}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:7,height:7,borderRadius:"50%",background:th.sc[src]||th.muted}}/><span style={{fontSize:11,color:th.text,fontWeight:500}}>{src}</span></div><span style={{fontSize:11,color:th.sub,fontWeight:600}}>{fmt(amt)}</span></div><div style={{height:7,background:th.barBg,borderRadius:4,overflow:"hidden"}}><div style={{width:pct+"%",height:"100%",background:th.sc[src]||th.muted,borderRadius:4,transition:"width 0.5s ease"}}/></div><div style={{fontSize:9,color:th.muted,marginTop:2,textAlign:"right"}}>{Math.round(pct)}%</div></div>);})}</div><div style={{marginTop:14,paddingTop:12,borderTop:"1px solid "+th.border,display:"flex",justifyContent:"space-between"}}><span style={{fontSize:11,fontWeight:600,color:th.text}}>Total</span><span style={{fontSize:13,fontWeight:700,color:th.accent,fontFamily:"'Playfair Display', serif"}}>{fmt(srcTotal)}</span></div></div>
+          )}
+        </div>
+      </div>
+
+      {/* Reset */}
+      <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",gap:10,padding:"0 20px 28px"}}>
+        {confirmReset?(<div style={{display:"flex",alignItems:"center",gap:8,animation:"fadeIn 0.15s ease"}}><span style={{fontSize:11,color:th.sub}}>{confirmReset==="month"?"Reset all wins for "+resetTargetMonth+" "+year+"?":"Reset all wins for "+year+"?"}</span><button onClick={confirmReset==="month"?resetMonth:resetYear} style={{padding:"5px 12px",borderRadius:6,border:"none",background:th.danger,color:"#FFFCF7",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans', sans-serif"}}>Yes</button><button onClick={()=>setConfirmReset(null)} style={{padding:"5px 12px",borderRadius:6,border:"1px solid "+th.border,background:"transparent",color:th.sub,fontSize:11,cursor:"pointer",fontFamily:"'DM Sans', sans-serif"}}>No</button></div>):(
+          <div style={{display:"flex",gap:8}}>
+            <div style={{position:"relative"}} className="reset-btn"><div className="reset-tooltip" style={{background:th.card,border:"1px solid "+th.border,color:th.sub}}>Reset wins for {resetTargetMonth}</div><button onClick={()=>setConfirmReset("month")} style={{display:"flex",alignItems:"center",gap:3,padding:"4px 8px",borderRadius:8,border:"1px solid "+th.border,background:"transparent",cursor:"pointer",fontFamily:"'DM Sans', sans-serif"}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={th.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg><span style={{fontSize:10,fontWeight:600,color:th.muted}}>M</span></button></div>
+            <div style={{position:"relative"}} className="reset-btn"><div className="reset-tooltip" style={{background:th.card,border:"1px solid "+th.border,color:th.sub}}>Reset wins for {year}</div><button onClick={()=>setConfirmReset("year")} style={{display:"flex",alignItems:"center",gap:3,padding:"4px 8px",borderRadius:8,border:"1px solid "+th.border,background:"transparent",cursor:"pointer",fontFamily:"'DM Sans', sans-serif"}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={th.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg><span style={{fontSize:10,fontWeight:600,color:th.muted}}>Y</span></button></div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  </script>
+</body>
+</html>
