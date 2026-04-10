@@ -514,8 +514,58 @@ function importCSV(){
   state.csvText="";state.showCSVPanel=false;save();render();
 }
 
-// Init
-load();
+// Demo data — pre-loaded for screen recording
+(function loadDemo(){
+  state.wins = [
+    // 2025
+    {id:"d01",year:2025,month:"Aug",project:"INFINIT",amount:73,source:"Bounties"},
+    {id:"d02",year:2025,month:"Oct",project:"Everlyn",amount:491,source:"Bounties"},
+    {id:"d03",year:2025,month:"Oct",project:"Portal",amount:123,source:"Bounties"},
+    {id:"d04",year:2025,month:"Nov",project:"GOAT",amount:43,source:"Predictions"},
+    {id:"d05",year:2025,month:"Dec",project:"Theoriq",amount:210,source:"Bounties"},
+    {id:"d06",year:2025,month:"Dec",project:"Theoriq",amount:33,source:"Bounties"},
+    {id:"d07",year:2025,month:"Dec",project:"Yapmarket",amount:19,source:"Content"},
+    {id:"d08",year:2025,month:"Dec",project:"Infinit",amount:84,source:"Bounties"},
+    {id:"d09",year:2025,month:"Dec",project:"GOAT",amount:24,source:"Predictions"},
+    // 2026
+    {id:"d10",year:2026,month:"Jan",project:"ApexProtocol",amount:100,source:"Bounties"},
+    {id:"d11",year:2026,month:"Jan",project:"Sentient",amount:309,source:"Bounties"},
+    {id:"d12",year:2026,month:"Jan",project:"Helios",amount:24,source:"Bounties"},
+    {id:"d13",year:2026,month:"Jan",project:"GOAT",amount:33,source:"Predictions"},
+    {id:"d14",year:2026,month:"Jan",project:"Elon",amount:21,source:"Other"},
+    {id:"d15",year:2026,month:"Feb",project:"Limewire",amount:6,source:"Content"},
+    {id:"d16",year:2026,month:"Feb",project:"Melted Mindz",amount:48,source:"NFTs"},
+    {id:"d17",year:2026,month:"Feb",project:"Yapmarket",amount:21.94,source:"Content"},
+    {id:"d18",year:2026,month:"Feb",project:"Yapmarket",amount:30,source:"Content"},
+    {id:"d19",year:2026,month:"Feb",project:"Moltx",amount:5,source:"Bounties"},
+    {id:"d20",year:2026,month:"Feb",project:"Duel Duck S2",amount:52.96,source:"Predictions"},
+    {id:"d21",year:2026,month:"Feb",project:"Woldotfun",amount:7,source:"Other"},
+    {id:"d22",year:2026,month:"Feb",project:"Yapmarket",amount:26.5,source:"Content"},
+    {id:"d23",year:2026,month:"Mar",project:"Pudgy Penguins (Kreators)",amount:75,source:"NFTs"},
+    {id:"d24",year:2026,month:"Mar",project:"XOOB NFT",amount:90,source:"NFTs"},
+    {id:"d25",year:2026,month:"Mar",project:"Yapmarket",amount:23,source:"Content"},
+    {id:"d26",year:2026,month:"Mar",project:"RallyOnChain",amount:20,source:"Bounties"},
+    {id:"d27",year:2026,month:"Mar",project:"X Monetization",amount:28.88,source:"X Monetization"},
+    {id:"d28",year:2026,month:"Mar",project:"Yapmarket",amount:22,source:"Content"},
+    {id:"d29",year:2026,month:"Mar",project:"Duel Duck",amount:12,source:"Predictions"},
+    {id:"d30",year:2026,month:"Mar",project:"Javi NFT",amount:15,source:"NFTs"},
+    {id:"d31",year:2026,month:"Mar",project:"Kreators",amount:16,source:"NFTs"},
+    {id:"d32",year:2026,month:"Mar",project:"Rally",amount:3,source:"Bounties"},
+    {id:"d33",year:2026,month:"Apr",project:"GRVT Hoeem",amount:250,source:"Bounties"},
+    {id:"d34",year:2026,month:"Apr",project:"Pudgy Penguins (Kreators)",amount:75,source:"NFTs"},
+    {id:"d35",year:2026,month:"Apr",project:"XOOB NFT",amount:90,source:"NFTs"},
+    {id:"d36",year:2026,month:"Apr",project:"Yapmarket",amount:23,source:"Content"},
+    {id:"d37",year:2026,month:"Apr",project:"RallyOnChain",amount:20,source:"Bounties"},
+    {id:"d38",year:2026,month:"Apr",project:"X Monetization",amount:28.88,source:"X Monetization"},
+    {id:"d39",year:2026,month:"Apr",project:"Yapmarket",amount:22,source:"Content"},
+    {id:"d40",year:2026,month:"Apr",project:"Duel Duck",amount:12,source:"Predictions"},
+    {id:"d41",year:2026,month:"Apr",project:"Javi NFT",amount:15,source:"NFTs"},
+    {id:"d42",year:2026,month:"Apr",project:"Kreators",amount:16,source:"NFTs"},
+    {id:"d43",year:2026,month:"Apr",project:"Rally",amount:3,source:"Bounties"},
+  ];
+  state.goals = {"2026-Jan":500,"2026-Feb":250,"2026-Mar":350,"2026-Apr":600};
+  state.year = 2026;
+})();
 render();
 </script>
 </body>
