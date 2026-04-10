@@ -1,6 +1,6 @@
 # Wins Tracker App
 
-A personal monthly wins tracker for logging earnings, setting goals, and visualizing income sources — built with zero build tools.
+A personal monthly wins tracker for logging earnings, setting goals, and visualizing income sources.
 
 ## Demo
 
@@ -19,7 +19,7 @@ A personal monthly wins tracker for logging earnings, setting goals, and visuali
 - Switch devices by exporting CSV from one and importing on another
 - Year navigation to track across multiple years
 - Reset controls for individual months or full year
-- Fully responsive — works on mobile and desktop
+- Fully responsive - works on mobile and desktop
 
 ## Project Structure
 
@@ -57,7 +57,7 @@ GOAL,2026,Jan,500
 GOAL,2026,Feb,400
 ```
 
-Export from one device, import on another — your data travels with you.
+Export from one device, import on another - your data travels with you.
 
 ## Built With
 

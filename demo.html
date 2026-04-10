@@ -232,8 +232,10 @@ function render(){
   ctSel.onchange=e=>{state.chartType=e.target.value;render();};
   chartHdr.appendChild(ctSel);chartCard.appendChild(chartHdr);
 
-  const canvas=el("canvas",{id:"mainChart",style:{width:"100%",maxHeight:"300px"}});
+  const isPie=state.chartType.toLowerCase()==="pie";
+  const canvas=el("canvas",{id:"mainChart",style:{width:"100%",maxHeight:isPie?"360px":"300px"}});
   chartCard.appendChild(canvas);
+  if(isPie)chartCard.style.paddingBottom="24px";
   app.appendChild(chartCard);
 
   // Add button
@@ -529,8 +531,10 @@ function importCSV(){
   state.csvText="";state.showCSVPanel=false;save();render();
 }
 
+// Init
+load();
 
-// Demo data — pre-loaded for screen recording
+// Demo data
 (function loadDemo(){
   state.wins = [
     {id:"d01",year:2025,month:"Aug",project:"INFINIT",amount:73,source:"Bounties"},
